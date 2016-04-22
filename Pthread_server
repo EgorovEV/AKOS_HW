@@ -1,0 +1,140 @@
+#include <math.h>
+#include <algorithm>
+#include <pthread.h>
+#include <assert.h>
+#include <list>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <string.h>
+
+
+#define THREAD_N 20
+
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+std::list<int> queue;
+
+
+void *entry(void *) {
+
+  while (true) {
+
+    printf("in 'entry'\n");
+    pthread_mutex_lock(&mutex);
+
+    while (!queue.size()) {
+
+      assert(!pthread_cond_wait(&cond, &mutex));
+
+    }
+
+    int sock = queue.front();
+
+    queue.pop_front();
+    printf("in 'mutex'\n");
+
+    pthread_mutex_unlock(&mutex);
+
+    if (!sock) {
+      break;
+    }
+    
+    char buf[256];
+    int bytes_read;
+    while(true)
+    {
+      //printf("sock= %d\n", sock);
+        bytes_read = recv(sock, buf, 256, 0);
+        if (bytes_read <=0) 
+	  break;
+      
+	char sock_s[8];
+	int i = (int)log10(sock) + 1;
+	int c = 1;
+	while (c = (sock % (int)pow(10,i)) / pow(10,i-1) )
+	{
+	  sock_s[i-1] = (c + '0');
+	  ++i;
+	}
+
+	sock_s[i-1] = '.';
+	sock_s[i] = 't';
+	sock_s[i+1] = 'x';
+	sock_s[i+2] = 't';
+	FILE *pfile;
+	pfile = fopen((const char*)sock_s, "a");
+	fputs(buf, pfile);
+	fclose(pfile);
+    }
+  }
+  return NULL;
+}
+
+int main() {
+  
+    int sock;
+    int listener;
+    struct sockaddr_in addr;
+    listener = socket(AF_INET, SOCK_STREAM, 0);
+    if(listener < 0)
+    {
+        printf("socket\n");
+        exit(1);
+    }
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(5000);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    
+    if(bind(listener, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    {
+        printf("bind\n");
+        exit(2);
+    }
+ 
+    listen(listener, 1);
+
+  pthread_t *pool = new pthread_t[THREAD_N];
+
+  for (int i = 0; i < THREAD_N; i++) {
+
+    pthread_create((pool + i), NULL, entry, NULL);
+
+  }
+  
+ 
+
+  while (true) {
+
+      // sock = accept()
+      sock = accept(listener, NULL, NULL);
+
+      pthread_mutex_lock(&mutex);
+
+      queue.push_back(sock);
+
+      pthread_mutex_unlock(&mutex);
+
+      pthread_cond_signal(&cond);
+
+  }
+
+  for (int i = 0; i < THREAD_N; i++) {
+
+    pthread_join(pool[i], NULL);
+
+  }
+
+  delete[] pool;
+
+  return 0;
+
+}
