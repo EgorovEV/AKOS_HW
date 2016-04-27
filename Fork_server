@@ -1,0 +1,103 @@
+#include <iostream>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+
+#include <math.h>
+//#include <assert.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <stdlib.h>
+#include <string.h>
+
+using std::cout;
+using std::endl;
+
+void entry(int sock) {
+    printf("in 'entry'\n");
+    char buf[256];
+    int bytes_read;
+    
+    while(true)
+    {
+        bytes_read = recv(sock, buf, 256, 0);
+        if (bytes_read <=0) 
+	  break;
+	if (!strcmp(buf, "SQ"))
+	{
+	  cout << "Complete session" << endl;
+	  return;
+	}
+	char sock_s[6];
+	int i = (int)log10(sock) + 1;
+	int c = 1;
+	while (c = (sock % (int)pow(10,i)) / pow(10,i-1) )
+	{
+	  sock_s[i-1] = (c + '0');
+	  ++i;
+	}
+	sock_s[i-1] = '.';
+	sock_s[i] = 't';
+	sock_s[i+1] = 'x';
+	sock_s[i+2] = 't';
+	FILE *pfile;
+	pfile = fopen((const char*)sock_s, "a");
+	fputs(buf, pfile);
+	fclose(pfile);
+      
+    }
+}
+
+int main()
+{
+  pid_t pid, ppid;
+  int sock;
+  int listener;
+  struct sockaddr_in addr;
+  listener = socket(AF_INET, SOCK_STREAM, 0);
+  if(listener < 0)
+  {
+      printf("socket\n");
+      exit(1);
+  }
+
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(5000);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    
+  if(bind(listener, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+  {
+      printf("bind\n");
+      exit(2);
+  }
+ 
+  listen(listener, 1);
+
+  while (true)
+  {
+    sock = accept(listener, NULL, NULL);
+    if (!sock)
+    {
+      cout << "ERRORE! Can't accept socket!" << endl;
+      break;
+    }
+    pid = fork();
+    if (pid < 0)
+    {
+      std::cout << "ERRORE! Can't make fork" << endl;
+      break;
+    } 
+    else if (pid == 0)
+    {
+      //std::cout << "child" << endl;
+      entry(sock);
+      //std::cout << "end of child" << endl;
+      return 0;
+    }
+    //else 
+    //{
+    //  std::cout << "parent" << endl;
+    //}
+  }
+  return 0;
+}
