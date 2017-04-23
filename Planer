@@ -1,0 +1,169 @@
+#include <iostream>
+#include <string>
+//#include <concurrent_priority_queue.h>
+#include <queue>
+#include <unordered_map>
+#include <list>
+#include <utility>
+#include <fstream>
+
+using std::string;
+
+class unexisted_note_error : public std::exception
+{
+public:
+	explicit unexisted_note_error()
+	{ }
+
+	virtual const char* what() const throw() {
+		return "Callable note doesn't exist!";
+	}
+};
+
+class Note {
+public:
+	Note(string date, string title) :
+		_date(date),
+		_title(title) {}
+	string get_date() { return _date; }
+	string get_title() { return _title; }
+	void set_date(string date) { _date = date; }
+	void set_title(string title) { _title = title; }
+private:
+	string _date;
+	string _title;
+};
+
+/*class Consumers_database {
+public:
+	bool log_in(string name) {
+		if (_map.find(name) == _map.end) {
+			std::cout << "This account has already been created!" << std::endl;
+			return false;
+		}
+		Person* person_ptr = new Person(name);	//тут будет вызов конструктора класса Person
+		std::pair<string, Person*> new_client;
+		new_client.first = name; new_client.second = person_ptr;
+		_map.insert(new_client);
+
+		return true;
+	}
+	bool delete_acc(string name) {
+		if (_map.find(name) == _map.end) {
+			std::cout << "This account has not existed yet!" << std::endl;
+			return false;
+		}
+		//_map.find(name)
+		_map.erase(name);
+	}
+
+	virtual ~Consumers_database() {
+		for (auto iter : _map) {
+			delete iter.second;
+		}
+	}
+private:
+	std::unordered_map<string, Person*> _map;
+};*/
+
+
+class Person {
+public:
+	Person();
+	Person(string name) : _name(name) {}
+	string get_name() { return _name; }
+	~Person() {}
+private:
+	string _name;
+};
+
+class Person_Planer : public Person {	
+public:
+	Person_Planer() { 
+		if (!_events.empty()) {
+			std::cout << "smth wrong, repeat!\n";
+			throw _SYSTEM_ERROR_;
+		}
+	};
+	void insert(string &date, string &title) {
+		_events.push_back(Note(date, title));
+	}
+	void insert(const char* date, const char* title) { insert(string(date), string(title)); }
+	bool remove(string &title) {
+		Note* del;
+		try {
+			del = &find_note(title);
+		}
+		catch (unexisted_note_error) {
+			return false;
+		}
+		_events.remove(*del);
+		return true;
+	}
+	bool edit(string &old_title, string new_date = "$", string new_title = "$") {
+		try {
+			find_note(old_title);
+		}
+		catch (unexisted_note_error) {
+			return false;
+		}
+
+		for (auto note : _events)
+			if (note.get_title() == old_title) {
+				if (new_date != "$")
+					note.set_date(new_date);
+				if (new_title != "$")
+					note.set_title(new_title);
+				return true;
+			}
+	}
+	void show_all() {
+		std::cout << get_name() << ", you have those deals and events:" << std::endl;
+		for (auto note : _events) 
+			std::cout << note.get_date() << "  " << note.get_title() << std::endl;
+	}
+	void show_nearest(int require_amount = 5) {
+		_events.sort();
+		int printed = 0;
+		std::cout << get_name() << ", nearest " << require_amount << " events are: "<< std::endl;
+		for (auto note : _events) {
+			if (printed > require_amount)
+				break;
+			std::cout << note.get_date() << "  " << note.get_title() << std::endl;
+			++printed;
+		}
+	}
+	~Person_Planer() {	
+		std::ofstream fout;
+		fout.open("My_planer.txt");
+		for (auto note : _events) {
+			fout << note.get_date() << " " << note.get_title() << "\n";
+		}
+	}
+private:
+	Note find_note(string &title) {
+		bool find = false;
+		for (auto iter : _events)
+			if (iter.get_title() == title)
+				return iter;
+		throw unexisted_note_error();
+	}
+	std::list<Note> _events;
+};
+
+int main() {
+	Person_Planer pl;
+	pl.insert("2017-04-23", "make project");
+	pl.insert("2017-05-01", "selebrete 1 may");
+	pl.insert("2017-05-31", "prepare");
+	pl.insert("2017-01-23", "qwe");
+	pl.insert("2017-04-24", "sleep");
+	pl.insert("2017-02-23", "selebrate");
+	pl.show_all();
+	//pl.insert("2017-04-23", "make project");
+
+
+	return 0;
+}
+
+
