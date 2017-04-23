@@ -6,6 +6,7 @@
 #include <list>
 #include <utility>
 #include <fstream>
+#include <algorithm>   
 
 using std::string;
 
@@ -29,6 +30,12 @@ public:
 	string get_title() { return _title; }
 	void set_date(string date) { _date = date; }
 	void set_title(string title) { _title = title; }
+	bool operator==(Note other) {	
+		return (this->_date == other.get_date() && this->_title == other.get_title());
+	}
+	bool operator<(Note other) {
+		return this->_date < other.get_date();
+	}
 private:
 	string _date;
 	string _title;
@@ -69,9 +76,14 @@ private:
 
 class Person {
 public:
-	Person();
+	Person() : _name("__NoName__") {}
+
 	Person(string name) : _name(name) {}
+
 	string get_name() { return _name; }
+
+	void set_name(const char* name) { _name = name; }
+
 	~Person() {}
 private:
 	string _name;
@@ -88,40 +100,47 @@ public:
 	void insert(string &date, string &title) {
 		_events.push_back(Note(date, title));
 	}
+
 	void insert(const char* date, const char* title) { insert(string(date), string(title)); }
-	bool remove(string &title) {
-		Note* del;
-		try {
-			del = &find_note(title);
+
+	bool edit(string &old_title, string new_date = "$", string new_title = "$") {
+		std::list<Note>::iterator it;
+		for (std::list<Note>::iterator note = _events.begin(); note != _events.end(); ++note)
+			if (note->get_title() == old_title) {
+				it = note;
+				break;
+			}
+		if (new_date != "$")
+			it->set_date(new_date);
+		if (new_title != "$") {
+			it->set_title(new_title);
 		}
-		catch (unexisted_note_error) {
-			return false;
-		}
-		_events.remove(*del);
 		return true;
 	}
-	bool edit(string &old_title, string new_date = "$", string new_title = "$") {
-		try {
-			find_note(old_title);
-		}
-		catch (unexisted_note_error) {
-			return false;
-		}
 
-		for (auto note : _events)
-			if (note.get_title() == old_title) {
-				if (new_date != "$")
-					note.set_date(new_date);
-				if (new_title != "$")
-					note.set_title(new_title);
+	bool edit(const char* old_title, const char* new_date = "$", const char* new_title = "$") {
+		return edit(string(old_title), string(new_date), string(new_title));
+	}
+
+	bool remove(string &title) {
+		std::list<Note>::iterator note;
+		for (note = _events.begin(); note != _events.end(); ++note)
+			if (note->get_title() == title) {
+				_events.erase(note);
 				return true;
 			}
+		if (note == _events.end())
+			return false;
 	}
+
+	bool remove(const char* title) { return remove(string(title)); }
+
 	void show_all() {
-		std::cout << get_name() << ", you have those deals and events:" << std::endl;
+		std::cout  << this->get_name() << ", you have those deals and events:" << std::endl;
 		for (auto note : _events) 
 			std::cout << note.get_date() << "  " << note.get_title() << std::endl;
 	}
+
 	void show_nearest(int require_amount = 5) {
 		_events.sort();
 		int printed = 0;
@@ -133,6 +152,7 @@ public:
 			++printed;
 		}
 	}
+
 	~Person_Planer() {	
 		std::ofstream fout;
 		fout.open("My_planer.txt");
@@ -141,18 +161,12 @@ public:
 		}
 	}
 private:
-	Note find_note(string &title) {
-		bool find = false;
-		for (auto iter : _events)
-			if (iter.get_title() == title)
-				return iter;
-		throw unexisted_note_error();
-	}
 	std::list<Note> _events;
 };
 
 int main() {
 	Person_Planer pl;
+
 	pl.insert("2017-04-23", "make project");
 	pl.insert("2017-05-01", "selebrete 1 may");
 	pl.insert("2017-05-31", "prepare");
@@ -160,9 +174,13 @@ int main() {
 	pl.insert("2017-04-24", "sleep");
 	pl.insert("2017-02-23", "selebrate");
 	pl.show_all();
-	//pl.insert("2017-04-23", "make project");
+	pl.edit("selebrate", "$", "selebratedddd");
+	pl.remove("qwe");
+	pl.show_all();
+	pl.show_nearest(2);
 
-
+	pl.set_name("OOP");
+	pl.show_all();
 	return 0;
 }
 
