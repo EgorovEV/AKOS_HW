@@ -1,12 +1,12 @@
 #include <iostream>
 #include <string>
-//#include <concurrent_priority_queue.h>
 #include <queue>
 #include <unordered_map>
 #include <list>
 #include <utility>
 #include <fstream>
 #include <algorithm>   
+#include <ctime>
 
 using std::string;
 
@@ -41,38 +41,6 @@ private:
 	string _title;
 };
 
-/*class Consumers_database {
-public:
-	bool log_in(string name) {
-		if (_map.find(name) == _map.end) {
-			std::cout << "This account has already been created!" << std::endl;
-			return false;
-		}
-		Person* person_ptr = new Person(name);	//тут будет вызов конструктора класса Person
-		std::pair<string, Person*> new_client;
-		new_client.first = name; new_client.second = person_ptr;
-		_map.insert(new_client);
-
-		return true;
-	}
-	bool delete_acc(string name) {
-		if (_map.find(name) == _map.end) {
-			std::cout << "This account has not existed yet!" << std::endl;
-			return false;
-		}
-		//_map.find(name)
-		_map.erase(name);
-	}
-
-	virtual ~Consumers_database() {
-		for (auto iter : _map) {
-			delete iter.second;
-		}
-	}
-private:
-	std::unordered_map<string, Person*> _map;
-};*/
-
 
 class Person {
 public:
@@ -84,10 +52,11 @@ public:
 
 	void set_name(const char* name) { _name = name; }
 
-	~Person() {}
+	virtual ~Person() {}
 private:
 	string _name;
 };
+
 
 class Person_Planer : public Person {	
 public:
@@ -97,6 +66,16 @@ public:
 			throw _SYSTEM_ERROR_;
 		}
 	};
+
+	Person_Planer(string name_to_file) {
+		std::ifstream input_file(name_to_file + "_Planner.txt");
+		string str_note;
+		while (getline(input_file, str_note)) {                        
+			_events.push_back(_split_to_note(str_note)); 
+		}
+		input_file.close();
+	}
+
 	void insert(string &date, string &title) {
 		_events.push_back(Note(date, title));
 	}
@@ -143,28 +122,45 @@ public:
 
 	void show_nearest(int require_amount = 5) {
 		_events.sort();
+		string cur_date = _get_current_date();
 		int printed = 0;
 		std::cout << get_name() << ", nearest " << require_amount << " events are: "<< std::endl;
 		for (auto note : _events) {
-			if (printed > require_amount)
-				break;
-			std::cout << note.get_date() << "  " << note.get_title() << std::endl;
-			++printed;
+			if (cur_date < note.get_date())
+				if (printed > require_amount)
+					break;
+				std::cout << note.get_date() << "  " << note.get_title() << std::endl;
+				++printed;
 		}
 	}
 
-	~Person_Planer() {	
+	void exit() {
 		std::ofstream fout;
-		fout.open("My_planer.txt");
+		fout.open(this->get_name() + "_Planner.txt");
 		for (auto note : _events) {
 			fout << note.get_date() << " " << note.get_title() << "\n";
 		}
+		fout.close();
 	}
 private:
+	string _get_current_date() {
+		time_t t = time(0);   // get time now
+		struct tm * now = localtime(&t);
+		return std::to_string(now->tm_year + 1900) + '-'
+			+ std::to_string(now->tm_mon + 1) + '-'
+			+ std::to_string(now->tm_mday);
+	}
+
+	Note _split_to_note(string note_str) {
+		size_t space = note_str.find(" ");
+		return Note(note_str.substr(0, space), note_str.substr(space + 1, note_str.length() - space - 1));
+	}
+
 	std::list<Note> _events;
 };
 
 int main() {
+	setlocale(LC_ALL, "rus");
 	Person_Planer pl;
 
 	pl.insert("2017-04-23", "make project");
@@ -176,12 +172,20 @@ int main() {
 	pl.show_all();
 	pl.edit("selebrate", "$", "selebratedddd");
 	pl.remove("qwe");
-	pl.show_all();
+	//pl.show_all();
 	pl.show_nearest(2);
 
 	pl.set_name("OOP");
 	pl.show_all();
+	pl.exit();
+
+	string name = "OOP";
+	Person_Planer pl2(name);
+	pl2.insert("2015-01-01", "gotcha!");
+	pl2.show_all();
+
 	return 0;
 }
+
 
 
