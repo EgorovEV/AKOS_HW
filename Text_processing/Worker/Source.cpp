@@ -94,7 +94,7 @@ HANDLE sourceFileMap;
 HANDLE terminateEvent;
 
 int wmain(int argc, wchar_t** argv) {
-	const wstring filenm = L"C:\\Users\\РµРІРіРµРЅРёР№\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt";
+	const wstring filenm = L"C:\\Users\\евгений\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt";
 	int processID = argv[0][15];
 	processID -= 48;
 	wcout << "In proc: " << processID << L"\n";
@@ -127,15 +127,15 @@ int wmain(int argc, wchar_t** argv) {
 	DWORD catchedEvent = WaitForMultipleObjects(2, events, FALSE, INFINITE);
 	switch (catchedEvent) {
 	case WAIT_FAILED:
-		// РЅРµРїСЂР°РІРёР»СЊРЅС‹Р№ РІС‹Р·РѕРІ С„СѓРЅРєС†РёРё (РЅРµРІРµСЂРЅС‹Р№ РѕРїРёСЃР°С‚РµР»СЊ?)
+		// неправильный вызов функции (неверный описатель?)
 		break;
 
 	case WAIT_TIMEOUT:
-		// РЅРё РѕРґРёРЅ РёР· РѕР±СЉРµРєС‚РѕРІ РЅРµ РѕСЃРІРѕР±РѕРґРёР»СЃСЏ РІ С‚РµС‡РµРЅРёРµ 5000 РјСЃ -> infinite
+		// ни один из объектов не освободился в течение 5000 мс -> infinite
 		break;
 	case WAIT_OBJECT_0 + 0:
 	{
-		PVOID mappedFile = MapFile(L"C:\\Users\\РµРІРіРµРЅРёР№\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt", sourceFile, sourceFileSize, sourceFileMap);
+		PVOID mappedFile = MapFile(L"C:\\Users\\евгений\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt", sourceFile, sourceFileSize, sourceFileMap);
 		wstring cleanText = cleanTextInMappedFile(mappedFile, 2, bad_words, processID);
 		wstring output = to_wstring(processID) + L".txt";
 		writeToFile(cleanText, output);

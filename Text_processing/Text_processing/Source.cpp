@@ -112,14 +112,14 @@ DWORD sourceFileSize;
 HANDLE sourceFileMap;
 HANDLE terminateEvent;
 
-//run_proc -- СЃРѕР·РґР°РµС‚ СЃРѕР±С‹С‚РёСЏ Рё РїСЂРѕС†РµСЃСЃС‹
+//run_proc -- создает события и процессы
 void run_proc() {
 	DWORD processID = GetCurrentProcessId();
 	
 
 	std::vector<PVOID> mappedFilesText(1);
 
-	//РёРјРµРЅР° РґРѕР»Р¶РЅС‹ СЃРѕРІРїР°РґР°С‚СЊ СЃ РёРјРµРЅР°РјРё РІ Worker.exe
+	//имена должны совпадать с именами в Worker.exe
 	//std::wstring Ready_to_proccesing_ev = (std::wstring(L"Global\\Ready") + std::to_wstring(processID));
 	//LPCTSTR Close_evName = L"Global\\Close";
 	//std::wstring mappedFileName = (std::wstring(L"text.txt") + std::to_wstring(processID));
@@ -171,10 +171,10 @@ void run_proc() {
 	}
 }
 
-//filter_text -- СЂР°СЃРїСЂРµРґРµР»СЏРµС‚ РѕР±СЏР·Р°РЅРЅРѕСЃС‚Рё РґР»СЏ РїСЂРѕС†РµСЃСЃРѕРІ worker.exe - РєРѕРјСѓ РєР°РєСѓСЋ С‡Р°СЃС‚СЊ РїР°СЂСЃРёС‚СЊ.
-//С„Р°Р№Р» СЃС‡РёС‚Р°РµС‚СЃСЏ Рё РѕС‚С„РёР»СЊС‚СЂСѓРµС‚СЃСЏ Worker'Р°РјРё.
-//Р¶РґРµС‚, РїРѕРєР° РІСЃС‘ СЂР°СЃРїР°СЂСЃРёС‚СЊСЃСЏ
-//СЃРѕР±РёСЂР°СЋСЃСЏ РІ 1 С„Р°Р№Р»С‹ С‚РѕР¶Рµ РІ РІРѕСЂРєРµСЂРµ.
+//filter_text -- распределяет обязанности для процессов worker.exe - кому какую часть парсить.
+//файл считается и отфильтруется Worker'ами.
+//ждет, пока всё распарситься
+//собираюся в 1 файлы тоже в воркере.
 
 int filter_text() {
 	//vector<std::wstring> bad_words(2);
@@ -182,7 +182,7 @@ int filter_text() {
 	//bad_words[1] = L"dos";
 
 	/*if (IsFileExist(L"text.txt")) {
-	//СЃРёРіРЅР°Р» Рѕ РіРѕС‚РѕРІРЅРѕСЃС‚Рё
+	//сигнал о готовности
 	if (!SetEvent(onReadyForProcessingEvent)) {
 	return NULL;
 	}
@@ -208,19 +208,19 @@ int filter_text() {
 
 
 	for (int i = 0; i < numWorkers; ++i) {
-		//cleanText[i] = cleanTextInMappedFile(fileMaps[i], 2, bad_words);	//todo +РґРѕР±Р°РІРёС‚СЊ СЃРјРµС‰РµРЅРёРµ
-		//РѕРЅРѕ С‚Р°Рј СЃР°РјРѕ Р±СѓРґРµС‚ СЂР°Р±РѕС‚Р°С‚СЊ...
+		//cleanText[i] = cleanTextInMappedFile(fileMaps[i], 2, bad_words);	//todo +добавить смещение
+		//оно там само будет работать...
 		SetEvent(newTaskEvents[i]);
 	}
 	//Sleep(1000);
 	//DWORD catchedEvent = WaitForMultipleObjects(numWorkers, newTaskEvents.data(), TRUE, INFINITE);
 	/*switch (catchedEvent) {
 	case WAIT_FAILED:
-		// РЅРµРїСЂР°РІРёР»СЊРЅС‹Р№ РІС‹Р·РѕРІ С„СѓРЅРєС†РёРё (РЅРµРІРµСЂРЅС‹Р№ РѕРїРёСЃР°С‚РµР»СЊ?)
+		// неправильный вызов функции (неверный описатель?)
 		break;
 
 	case WAIT_TIMEOUT:
-		// РЅРё РѕРґРёРЅ РёР· РѕР±СЉРµРєС‚РѕРІ РЅРµ РѕСЃРІРѕР±РѕРґРёР»СЃСЏ РІ С‚РµС‡РµРЅРёРµ 5000 РјСЃ -> infinite
+		// ни один из объектов не освободился в течение 5000 мс -> infinite
 		break;
 	}*/
 	//cout << "already...\n";
@@ -275,12 +275,12 @@ void end_proc() {
 
 int main(int argc, char** argv)
 {
-	//Р—Р°РїСѓСЃРєР°С‚СЊ РѕС‚ РёРјРµРЅРё Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
+	//Запускать от имени администратора
 	run_proc();
 	filter_text();
 	end_proc();
 	int a;
-	wcout << L"Р’РІРµРґРёС‚Рµ С‡С‚Рѕ-РЅРёР±СѓРґСЊ РґР»СЏ Р·Р°РІРµСЂС€РµРЅРёСЏ\n";
+	wcout << L"Введите что-нибудь для завершения\n";
 	cin >> a;
 	return 0;
 }
