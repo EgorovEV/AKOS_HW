@@ -8,11 +8,11 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
 using namespace std;
 
 std::wstring cleanTextInMappedFile(PVOID Map_file_text, int dictSize, vector<std::wstring> dict) {
-	//wcout << L"________beginClean________" << text;
 	std::wstring text(&((wchar_t*)Map_file_text)[1]);
 	text.push_back(L' ');
 	text.insert(0, L" ");
@@ -63,19 +63,24 @@ PVOID MapFile(wchar_t* filename, HANDLE& sourceFile, DWORD& sourceFileSize, HAND
 	return sourceText;
 }
 
-void writeToFile(wchar_t* filename, std::wstring strToWrite, HANDLE sourceFile, int shift) {
-	//CloseHandle(sourceFile);
-	//CloseHandle(sourceFileMap);
-	//HANDLE sourceFile = CreateFile(filename, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	//assert(sourceFile == NULL);
+void writeToFile(std::wstring strToWrite, wstring filename) {
 	DWORD dwBytesWritten = 0;
+	HANDLE outputFile = CreateFile(
+		filename.c_str(),
+		FILE_APPEND_DATA,
+		0,
+		nullptr,
+		OPEN_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		nullptr);
+
 	BOOL bErrorFlag = WriteFile(
-		sourceFile,
+		outputFile,
 		strToWrite.c_str(),
 		strToWrite.length() * sizeof(wchar_t),
 		&dwBytesWritten,
 		NULL);
-	CloseHandle(sourceFile);
+	CloseHandle(outputFile);
 }
 
 bool IsFileExist(LPCTSTR strFileName)
@@ -107,18 +112,14 @@ DWORD sourceFileSize;
 HANDLE sourceFileMap;
 HANDLE terminateEvent;
 
-//run_proc -- создает события и процессы
+//run_proc -- СЃРѕР·РґР°РµС‚ СЃРѕР±С‹С‚РёСЏ Рё РїСЂРѕС†РµСЃСЃС‹
 void run_proc() {
 	DWORD processID = GetCurrentProcessId();
 	
-	std::vector<std::string> myargv;
-	myargv.resize(3);
-	myargv[1] = "in.txt";
-	myargv[2] = "16";
 
 	std::vector<PVOID> mappedFilesText(1);
 
-	//имена должны совпадать с именами в Worker.exe
+	//РёРјРµРЅР° РґРѕР»Р¶РЅС‹ СЃРѕРІРїР°РґР°С‚СЊ СЃ РёРјРµРЅР°РјРё РІ Worker.exe
 	//std::wstring Ready_to_proccesing_ev = (std::wstring(L"Global\\Ready") + std::to_wstring(processID));
 	//LPCTSTR Close_evName = L"Global\\Close";
 	//std::wstring mappedFileName = (std::wstring(L"text.txt") + std::to_wstring(processID));
@@ -170,10 +171,10 @@ void run_proc() {
 	}
 }
 
-//filter_text -- распределяет обязанности для процессов worker.exe - кому какую часть парсить.
-//файл считается и отфильтруется Worker'ами.
-//ждет, пока всё распарситься
-//собираюся в 1 файлы тоже в воркере.
+//filter_text -- СЂР°СЃРїСЂРµРґРµР»СЏРµС‚ РѕР±СЏР·Р°РЅРЅРѕСЃС‚Рё РґР»СЏ РїСЂРѕС†РµСЃСЃРѕРІ worker.exe - РєРѕРјСѓ РєР°РєСѓСЋ С‡Р°СЃС‚СЊ РїР°СЂСЃРёС‚СЊ.
+//С„Р°Р№Р» СЃС‡РёС‚Р°РµС‚СЃСЏ Рё РѕС‚С„РёР»СЊС‚СЂСѓРµС‚СЃСЏ Worker'Р°РјРё.
+//Р¶РґРµС‚, РїРѕРєР° РІСЃС‘ СЂР°СЃРїР°СЂСЃРёС‚СЊСЃСЏ
+//СЃРѕР±РёСЂР°СЋСЃСЏ РІ 1 С„Р°Р№Р»С‹ С‚РѕР¶Рµ РІ РІРѕСЂРєРµСЂРµ.
 
 int filter_text() {
 	//vector<std::wstring> bad_words(2);
@@ -181,7 +182,7 @@ int filter_text() {
 	//bad_words[1] = L"dos";
 
 	/*if (IsFileExist(L"text.txt")) {
-	//сигнал о готовности
+	//СЃРёРіРЅР°Р» Рѕ РіРѕС‚РѕРІРЅРѕСЃС‚Рё
 	if (!SetEvent(onReadyForProcessingEvent)) {
 	return NULL;
 	}
@@ -200,29 +201,60 @@ int filter_text() {
 		nullptr);
 
 	size_t lenF = GetFileSize(MyFile, NULL);
-	size_t part_len = lenF / 4;
+	size_t part_len = lenF / 2;
 
 	vector<std::wstring> cleanText(numWorkers);
 
+
+
 	for (int i = 0; i < numWorkers; ++i) {
-		//cleanText[i] = cleanTextInMappedFile(fileMaps[i], 2, bad_words);	//todo +добавить смещение
-		//оно там само будет работать...
+		//cleanText[i] = cleanTextInMappedFile(fileMaps[i], 2, bad_words);	//todo +РґРѕР±Р°РІРёС‚СЊ СЃРјРµС‰РµРЅРёРµ
+		//РѕРЅРѕ С‚Р°Рј СЃР°РјРѕ Р±СѓРґРµС‚ СЂР°Р±РѕС‚Р°С‚СЊ...
 		SetEvent(newTaskEvents[i]);
 	}
-	Sleep(1000);
+	//Sleep(1000);
 	//DWORD catchedEvent = WaitForMultipleObjects(numWorkers, newTaskEvents.data(), TRUE, INFINITE);
 	/*switch (catchedEvent) {
 	case WAIT_FAILED:
-		// неправильный вызов функции (неверный описатель?)
+		// РЅРµРїСЂР°РІРёР»СЊРЅС‹Р№ РІС‹Р·РѕРІ С„СѓРЅРєС†РёРё (РЅРµРІРµСЂРЅС‹Р№ РѕРїРёСЃР°С‚РµР»СЊ?)
 		break;
 
 	case WAIT_TIMEOUT:
-		// ни один из объектов не освободился в течение 5000 мс -> infinite
+		// РЅРё РѕРґРёРЅ РёР· РѕР±СЉРµРєС‚РѕРІ РЅРµ РѕСЃРІРѕР±РѕРґРёР»СЃСЏ РІ С‚РµС‡РµРЅРёРµ 5000 РјСЃ -> infinite
 		break;
 	}*/
-	cout << "already...\n";
+	//cout << "already...\n";
 	DWORD catchedEventFin = WaitForMultipleObjects(numWorkers, finishedTaskEvents.data(), TRUE, INFINITE);
-	cout << "~~~ALL!!!~~~\n";
+	//cout << "~~~~~~\n";
+	wstring final_text;
+	for (int i = 0; i < numWorkers; ++i) {
+
+		//cout << "File Exist?" << IsFileExist((to_wstring(i) + L".txt").c_str()) << '\n';
+		HANDLE MyTmpFile = CreateFile(
+			(to_wstring(i) + L".txt").c_str(),
+			GENERIC_ALL,
+			0,
+			nullptr,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr);
+		//cout << GetLastError() << '\n';
+		DWORD FileSize = GetFileSize(MyTmpFile, NULL);
+		//cout << FileSize << "<--fs\n";
+		//wcout << (to_wstring(i) + L".txt") << L'\n';
+		//FileSize = 30;
+		HANDLE file_handle = CreateFileMapping(MyTmpFile, NULL, PAGE_READWRITE, 0, FileSize, NULL);
+		//cout << GetLastError() << '\n';
+		PVOID P_Text = MapViewOfFile(file_handle, FILE_MAP_READ, 0, 0, 0);
+		//cout << GetLastError() << '\n';
+		std::wstring text(&((wchar_t*)P_Text)[1]);
+		//wcout << text << "<---\n";
+		final_text += text;
+		CloseHandle(MyTmpFile);
+	}
+	wstring final_filename = L"clear_text.txt";
+	writeToFile(final_text, final_filename);
+	wcout << final_text << L"<-------clear text\n";
 	return 0;
 }
 
@@ -243,10 +275,12 @@ void end_proc() {
 
 int main(int argc, char** argv)
 {
-	//Запускать от имени администратора
+	//Р—Р°РїСѓСЃРєР°С‚СЊ РѕС‚ РёРјРµРЅРё Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
 	run_proc();
 	filter_text();
-	//end_proc();
-	Sleep(1000);
+	end_proc();
+	int a;
+	wcout << L"Р’РІРµРґРёС‚Рµ С‡С‚Рѕ-РЅРёР±СѓРґСЊ РґР»СЏ Р·Р°РІРµСЂС€РµРЅРёСЏ\n";
+	cin >> a;
 	return 0;
 }
