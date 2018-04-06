@@ -1,156 +1,160 @@
-#define _SCL_SECURE_NO_WARNINGS // to enable unsafe iterators for std::regex_replace
-
+#include <string>
 #include <iterator>
-#include <fstream>
-#include <sstream>
+#include <algorithm>
 #include <cassert>
-#include <locale>
+#include <windows.h>
 #include <iostream>
-
-#include "Worker.h"
+#include <vector>
 
 using namespace std;
+DWORD sourceFileSize;
 
-/*
-* -создать объект(CreateFileMapping);
-* -получить доступ к данным(MapViewOfFile);
-* -закрыть доступ к данным(UnMapViewOfFile);
-* -попрощаться с объектом(CloseHandle).
-*/
-
-/*
-* Если вспомнить написанное выше, то страничный файл операционной системы используется как расширение памяти.
-* Под расширением понимается процесс подкачки (swap) ОЗУ, вызывающийся системой по мере необходимости.
-* Таким образом, создав объект файлового отображения, связанный со страничным свап-файлом, мы получим в качестве результата
-* выделение глобально доступной памяти. Так как эта память является общедоступной, то любой другой процесс,
-* создавший экземпляр объекта файлового отображения, будет иметь доступ к этим данным.
-*/
-
-
-
-std::wstring readFile(wchar_t* filename)
-{
-	HANDLE sourceFile = CreateFile(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	assert(sourceFile != NULL);
-	DWORD sourceFileSize = GetFileSize(sourceFile, NULL);
-	HANDLE sourceFileMap = CreateFileMapping(sourceFile, NULL, PAGE_READONLY, 0, sourceFileSize, NULL);
-	PVOID sourceText = MapViewOfFile(sourceFileMap, FILE_MAP_READ, 0, 0, 0);
-	std::wstring result(&((wchar_t*)sourceText)[1]);
-	UnmapViewOfFile(sourceFileMap);
-	CloseHandle(sourceFile);
-	CloseHandle(sourceFileMap);
-	return result;
+std::wstring cleanTextInMappedFile(PVOID Map_file_text, int dictSize, vector<std::wstring> dict, int id) {
+	std::wstring tmptext(&((wchar_t*)Map_file_text)[1]);
+	int text_len = tmptext.length();
+	int shift = id * text_len / 2;
+	
+	std::wstring text = tmptext.substr(shift, text_len / 2);
+	wcout << "text_to_parce:" << text << "\n";
+	text.push_back(L' ');
+	text.insert(0, L" ");
+	for (int i = 0; i < dictSize; i++) {
+		std::wstring pattern = L" " + std::wstring(dict[i]) + L" ";
+		size_t pos = 0;
+		while ((pos = text.find(pattern, pos)) != std::wstring::npos) {
+		    text.replace(pos, pattern.length(), L" ");
+		    pos += 1;
+		}
+	}
+	string output;
+	unique_copy(text.begin(), text.end(), back_insert_iterator<string>(output),
+		[](char a, char b) { return isspace(a) && isspace(b);});
+	wcout << L"Parsed text" << text << L"\n\n";
+	return text;
 }
 
-void writeToFile(wchar_t* filename, std::wstring strToWrite) {
-	HANDLE sourceFile = CreateFile(filename, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	assert (sourceFile == NULL);
+PVOID MapFile(wchar_t* filename, HANDLE& sourceFile, DWORD sourceFileSize, HANDLE& sourceFileMap)//, HANDLE& onReadyForProcessingEvent)
+{
+	sourceFile = CreateFile(filename, GENERIC_ALL, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	assert(sourceFile != NULL);
+	sourceFileSize = GetFileSize(sourceFile, NULL);
+	cout << "len^" << sourceFileSize << '\n';
+	sourceFileMap = CreateFileMapping(sourceFile, NULL, PAGE_READWRITE, 0, sourceFileSize, NULL);
+	PVOID sourceText = MapViewOfFile(sourceFileMap, FILE_MAP_READ, 0, 0, 0);	
+
+	if (sourceText == NULL)
+	{
+		fprintf(stdout, "MapViewOfFile: Error %ld\n",
+			GetLastError());
+		return NULL;
+	}
+	return sourceText;
+}
+
+void writeToFile(std::wstring strToWrite, wstring filename) {
 	DWORD dwBytesWritten = 0;
+
+	HANDLE outputFile = CreateFile(
+		filename.c_str(),
+		FILE_APPEND_DATA,
+		0,
+		nullptr,
+		OPEN_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		nullptr);
+
 	BOOL bErrorFlag = WriteFile(
-		sourceFile,
+		outputFile,
 		strToWrite.c_str(),
 		strToWrite.length() * sizeof(wchar_t),
 		&dwBytesWritten,
 		NULL);
-	CloseHandle(sourceFile);
+	CloseHandle(outputFile);
 }
 
-CWorker::CWorker(const string& targetWordsFilename, int id, HANDLE& mappedFile)
-	: id(id)
+bool IsFileExist(LPCTSTR strFileName)
 {
-	string line;
-	ifstream targetWordsFile;
-	targetWordsFile.open(targetWordsFilename);		
+	HANDLE hFile = ::CreateFile(strFileName,
+		GENERIC_READ,
+		FILE_SHARE_READ,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+	BOOL ans = (hFile != INVALID_HANDLE_VALUE);
+	CloseHandle(hFile);
+	return ans;
+}
 
-	vector<wstring> fourChar;
-	//fourChar.resize(10);
 
-	if (targetWordsFile.is_open())
+
+
+HANDLE sourceFile;
+HANDLE sourceFileMap;
+HANDLE terminateEvent;
+
+int wmain(int argc, wchar_t** argv) {
+	const wstring filenm = L"C:\\Users\\РµРІРіРµРЅРёР№\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt";
+	int processID = argv[0][15];
+	processID -= 48;
+	wcout << "In proc: " << processID << L"\n";
+	std::vector<std::string> myargv;
+
+	std::wstring Ready_to_proccesing_ev = (std::wstring(L"Global\\Ready") + std::to_wstring(processID));
+	LPCTSTR Close_evName = L"Global\\Close";
+	std::wstring onTaskIsDoneEventName = (std::wstring(L"Global\\Done") + std::to_wstring(processID));
+
+
+	HANDLE onReadyForProcessingEvent = CreateEvent(NULL, FALSE, FALSE, Ready_to_proccesing_ev.c_str());
+	assert(onReadyForProcessingEvent != NULL);
+
+
+	HANDLE Close_ev = CreateEvent(NULL, TRUE, FALSE, Close_evName);
+	assert(Close_ev != NULL);
+
+	HANDLE onTaskIsDoneEvent = CreateEvent(NULL, FALSE, FALSE, onTaskIsDoneEventName.c_str());
+	assert(onTaskIsDoneEvent != NULL);
+
+	vector<std::wstring> bad_words(2);
+	bad_words[0] = L"ms";
+	bad_words[1] = L"dos";
+
+	HANDLE events[2];
+	events[0] = onReadyForProcessingEvent;
+	events[1] = Close_ev;
+
+
+	DWORD catchedEvent = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+	switch (catchedEvent) {
+	case WAIT_FAILED:
+		// РЅРµРїСЂР°РІРёР»СЊРЅС‹Р№ РІС‹Р·РѕРІ С„СѓРЅРєС†РёРё (РЅРµРІРµСЂРЅС‹Р№ РѕРїРёСЃР°С‚РµР»СЊ?)
+		break;
+
+	case WAIT_TIMEOUT:
+		// РЅРё РѕРґРёРЅ РёР· РѕР±СЉРµРєС‚РѕРІ РЅРµ РѕСЃРІРѕР±РѕРґРёР»СЃСЏ РІ С‚РµС‡РµРЅРёРµ 5000 РјСЃ -> infinite
+		break;
+	case WAIT_OBJECT_0 + 0:
 	{
-		while (getline(targetWordsFile, line))
-		{
-			std::wstring wsTmp(line.begin(), line.end());
-			fourChar.push_back(wsTmp);
+		PVOID mappedFile = MapFile(L"C:\\Users\\РµРІРіРµРЅРёР№\\Documents\\Visual Studio 2015\\Projects\\Text_processing\\Worker\\text.txt", sourceFile, sourceFileSize, sourceFileMap);
+		wstring cleanText = cleanTextInMappedFile(mappedFile, 2, bad_words, processID);
+		wstring output = to_wstring(processID) + L".txt";
+		writeToFile(cleanText, output);
+
+		UnmapViewOfFile(mappedFile);
+
+		UnmapViewOfFile(sourceFileMap);
+		CloseHandle(sourceFile);
+		CloseHandle(sourceFileMap);
+		BOOL res = SetEvent(onTaskIsDoneEvent);
+		if (!res) {
+			return 1;
 		}
-		targetWordsFile.close();
+		int wait_please;
+		return 0;
 	}
-	else 
-		wcout << "Unable to open file";
 
-	//wcout << L"!!!!!!!!_"<< fourChar[0] << L"_!!!!!!!!!!";
-
-	std::wstring newTask = L"Global\\NewTask" + std::to_wstring(id);
-	std::wstring Finish = L"Global\\Finish" + std::to_wstring(id);
-	std::wstring Terminate = L"Global\\Terminate" + std::to_wstring(id);
-
-	newTaskEvent = CreateEvent(nullptr, FALSE, FALSE, newTask.c_str());
-	assert(newTaskEvent != nullptr);
-
-	finishedTaskEvent = CreateEvent(nullptr, FALSE, FALSE, Finish.c_str());
-	assert(finishedTaskEvent != nullptr);
-
-	terminateEvent = CreateEvent(nullptr, TRUE, FALSE, Terminate.c_str());
-	assert(terminateEvent != nullptr);
-
-	std::wstring FileMapName = L"Global\\FileMap" + std::to_wstring(id);
-	
-	mappedFile = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, 4096, FileMapName.c_str());
-	assert(mappedFile != NULL);
-	PVOID mappedFileText = MapViewOfFile(mappedFile, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, 0);
-	assert(mappedFileText != NULL);
-
-
-
-	/*creatinonFObj = CreateFileMapping(DEFAULT_BUFFER_SIZE, NULL, PAGE_READWRITE, 0, 0, FileMap.c_str());
-	assert(creatinonFObj != NULL);	
-
-	//подключение объекта файлового отображения к адресному пространству:
-	//получим начальный адрес данных объекта файлового отображения:
-	LPVOID LPfileMapV = MapViewOfFile(creatinonFObj, FILE_MAP_WRITE, 0, 0, 0);
-	assert(LPfileMapV != NULL);
-
-	fileMapV = static_cast<char*>(LPfileMapV);
-	//fileMap = OpenFileMapping(PAGE_READWRITE, FALSE, FileMap.c_str());
-	// all rights except EXECUTE, the handle cannot be inherited by createprocess(), имя объекта файлового отображения
-
-	//assert(fileMap != nullptr);*/
-}
-
-CWorker::~CWorker()
-{
-	CloseHandle(newTaskEvent);
-	CloseHandle(finishedTaskEvent);
-	CloseHandle(terminateEvent);
-
-	UnmapViewOfFile(creatinonFObj);
-	CloseHandle(fileMapV);
-}
-
-void CWorker::Work()
-{
-	while (true) {
-		/*std::vector<HANDLE> eventsToWait{ terminateEvent, newTaskEvent };
-		auto waitStatus = WaitForMultipleObjects(eventsToWait.size(), eventsToWait.data(), FALSE, INFINITE);
-		switch (waitStatus) {
-		case WAIT_OBJECT_0 + 0: // terminate event
-			return;
-		case WAIT_OBJECT_0 + 1: // new task event
-		{
-			// replacing target words with empty string
-			char* filteredViewEnd = std::regex_replace(fileView,
-				fileView,
-				fileView + std::strlen(fileView),
-				targetWords,
-				" ");
-
-			*filteredViewEnd = '\0';
-
-			SetEvent(finishedTaskEvent);*/
-	cout << "~~~~~~~~~~~~~~~~~\n";
-	break;
-		//}
-		//default:
-		//	assert(false);
-		//}
+	case WAIT_OBJECT_0 + 1:
+		return 0;
 	}
+	return 0;
 }
